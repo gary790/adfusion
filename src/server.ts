@@ -1,5 +1,6 @@
 // ============================================
-// AD FUSION - Main Express Server
+// AD FUSION v2.0 - Main Express Server
+// World-class Meta Ad Optimizer
 // ============================================
 import express from 'express';
 import cors from 'cors';
@@ -23,6 +24,13 @@ import automationRoutes from './routes/automation';
 import dashboardRoutes from './routes/dashboard';
 import billingRoutes from './routes/billing';
 import webhookHandler from './webhooks/handler';
+// v2.0 routes
+import creativeRoutes from './routes/creative';
+import capiRoutes from './routes/capi';
+import abtestRoutes from './routes/abtests';
+import competitorRoutes from './routes/competitors';
+import attributionRoutes from './routes/attribution';
+import auditRoutes from './routes/audit';
 
 const app = express();
 
@@ -76,6 +84,13 @@ app.use('/api/automation', apiLimiter, automationRoutes);
 app.use('/api/dashboard', apiLimiter, dashboardRoutes);
 app.use('/api/billing', apiLimiter, billingRoutes);
 app.use('/api/webhooks', webhookHandler);
+// v2.0 routes
+app.use('/api/creative', apiLimiter, creativeRoutes);
+app.use('/api/capi', apiLimiter, capiRoutes);
+app.use('/api/abtests', apiLimiter, abtestRoutes);
+app.use('/api/competitors', apiLimiter, competitorRoutes);
+app.use('/api/attribution', apiLimiter, attributionRoutes);
+app.use('/api/audit', apiLimiter, auditRoutes);
 
 // ---- Health check ----
 app.get('/api/health', async (_req, res) => {
@@ -83,10 +98,19 @@ app.get('/api/health', async (_req, res) => {
   res.json({
     status: dbHealthy ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
+    version: '2.0.0',
     services: {
       database: dbHealthy ? 'connected' : 'disconnected',
       environment: config.env,
+    },
+    features: {
+      creative_intelligence: config.features.creativeIntelligence,
+      capi: config.features.capiIntegration,
+      andromeda: config.features.andromedaAwareness,
+      proactive_ai: config.features.proactiveAiAudit,
+      cross_channel: config.features.crossChannelAttribution,
+      ab_testing: config.features.abTesting,
+      competitor_intel: config.features.competitorIntelligence,
     },
   });
 });
@@ -122,10 +146,11 @@ async function start() {
     }
 
     app.listen(config.port, '0.0.0.0', () => {
-      logger.info(`Ad Fusion server started on port ${config.port} [${config.env}]`);
+      logger.info(`Ad Fusion v2.0 server started on port ${config.port} [${config.env}]`);
       logger.info(`Dashboard: http://localhost:${config.port}`);
       logger.info(`API: http://localhost:${config.port}/api`);
       logger.info(`Health: http://localhost:${config.port}/api/health`);
+      logger.info('Features: Creative Intelligence, CAPI, A/B Testing, Competitor Intel, Cross-Channel Attribution, Proactive AI Audit');
     });
   } catch (error) {
     logger.error('Failed to start server', { error: (error as Error).message });

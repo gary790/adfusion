@@ -929,3 +929,533 @@ function metricCard(label,value,change,icon,color) {
   return `<div class="metric-card bg-white rounded-xl border border-gray-200 p-4"><div class="flex items-center justify-between mb-2"><span class="text-xs text-gray-400">${label}</span><div class="w-7 h-7 rounded-lg bg-${color}-100 flex items-center justify-center"><i class="${icon} text-${color}-600 text-xs"></i></div></div><p class="text-xl font-bold text-gray-900">${value}</p>${ch}</div>`;
 }
 function copyText(btn, text) { navigator.clipboard.writeText(text); btn.innerHTML='<i class="fas fa-check mr-1"></i>Copied'; setTimeout(()=>{btn.innerHTML='<i class="fas fa-copy mr-1"></i>Copy';},2000); }
+
+// ============================================
+// AD FUSION v2.0 — New Feature Pages
+// Creative Hub, A/B Testing, Competitors, Attribution, Audit, CAPI
+// ============================================
+
+// ---- Navigation Update ----
+// Override navigate to include new pages
+const _origNavigate = navigate;
+function navigate(page) {
+  state.currentPage = page;
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === page);
+    if (el.dataset.page !== page) el.classList.add('text-gray-600');
+    else el.classList.remove('text-gray-600');
+  });
+  const titles = {
+    dashboard:'Dashboard', campaigns:'Campaigns', ads:'Ads Manager', ai:'AI Engine',
+    automation:'Automation', copy:'Copy Generator', accounts:'Ad Accounts', billing:'Billing', settings:'Settings',
+    creative:'Creative Hub', abtests:'A/B Testing', competitors:'Competitor Intel',
+    attribution:'Cross-Channel Attribution', audit:'Health Audit', capi:'CAPI Tracking',
+  };
+  document.getElementById('page-title').textContent = titles[page] || page;
+
+  const pages = {
+    dashboard: renderDashboard, campaigns: renderCampaigns, ads: renderAdsManager, ai: renderAI,
+    automation: renderAutomation, copy: renderCopyGenerator, accounts: renderAccounts, billing: renderBilling, settings: renderSettings,
+    creative: renderCreativeHub, abtests: renderABTests, competitors: renderCompetitors,
+    attribution: renderAttribution, audit: renderAudit, capi: renderCAPI,
+  };
+  const renderer = pages[page];
+  if (renderer) renderer();
+}
+
+// ---- CREATIVE HUB ----
+async function renderCreativeHub() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-brand-500 text-2xl"></i></div>';
+  try {
+    const [leaderboardRes, diversityRes, winnersRes] = await Promise.all([
+      api.get('/creative/leaderboard?limit=10').catch(() => null),
+      api.get('/creative/diversity').catch(() => null),
+      api.get('/creative/winners').catch(() => null),
+    ]);
+    const leaderboard = leaderboardRes?.data?.data || [];
+    const diversity = diversityRes?.data?.data || {};
+    const winners = winnersRes?.data?.data || {};
+
+    el.innerHTML = `
+      <div class="space-y-6 fade-in">
+        <!-- Diversity Score -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          ${metricCard('Diversity Score', (diversity.diversity_score||0)+'/100', null, 'fas fa-palette', 'brand')}
+          ${metricCard('Total Creatives', fmtNum(diversity.total_creatives||0), null, 'fas fa-images', 'blue')}
+          ${metricCard('Healthy', fmtNum(diversity.healthy_count||0), null, 'fas fa-heart', 'emerald')}
+          ${metricCard('Fatigued', fmtNum((diversity.fatigued_count||0)+(diversity.critical_count||0)), null, 'fas fa-battery-quarter', 'rose')}
+        </div>
+
+        <!-- Format Breakdown -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4"><i class="fas fa-chart-pie text-brand-500 mr-2"></i>Format Breakdown</h3>
+            <div class="space-y-2">
+              ${Object.entries(diversity.format_breakdown||{}).map(([type, count]) => `
+                <div class="flex items-center justify-between py-1.5">
+                  <span class="text-sm capitalize">${type}</span>
+                  <div class="flex items-center gap-2">
+                    <div class="w-24 h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-brand-500 rounded-full" style="width:${diversity.total_creatives?((count/diversity.total_creatives)*100).toFixed(0):0}%"></div></div>
+                    <span class="text-xs text-gray-500 w-8">${count}</span>
+                  </div>
+                </div>
+              `).join('') || '<p class="text-sm text-gray-400 text-center py-4">No creatives indexed yet</p>'}
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4"><i class="fas fa-lightbulb text-amber-500 mr-2"></i>Recommendations</h3>
+            <div class="space-y-2">
+              ${(diversity.recommendations||[]).map(r => `<div class="flex items-start gap-2 p-2 bg-amber-50 rounded-lg"><i class="fas fa-arrow-right text-amber-500 mt-0.5 text-xs"></i><span class="text-sm">${esc(r)}</span></div>`).join('') || '<p class="text-sm text-gray-400 text-center py-4">No recommendations</p>'}
+            </div>
+          </div>
+        </div>
+
+        <!-- Winners -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 class="text-sm font-semibold text-gray-700 mb-4"><i class="fas fa-trophy text-yellow-500 mr-2"></i>Creative Winners (${winners.winners||0})</h3>
+          <p class="text-xs text-gray-400">${Object.entries(winners.categories||{}).map(([k,v]) => `${v}`).join(' · ') || 'Run sync to identify winners'}</p>
+        </div>
+
+        <!-- Leaderboard -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-gray-700"><i class="fas fa-ranking-star text-brand-500 mr-2"></i>Creative Leaderboard</h3>
+            <button onclick="syncCreatives()" class="text-xs text-brand-600 hover:underline"><i class="fas fa-sync-alt mr-1"></i>Sync Creatives</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50"><tr>
+                <th class="text-left px-3 py-2 text-xs text-gray-500">Creative</th>
+                <th class="text-left px-3 py-2 text-xs text-gray-500">Type</th>
+                <th class="text-right px-3 py-2 text-xs text-gray-500">CTR</th>
+                <th class="text-right px-3 py-2 text-xs text-gray-500">Spend</th>
+                <th class="text-right px-3 py-2 text-xs text-gray-500">Fatigue</th>
+                <th class="text-center px-3 py-2 text-xs text-gray-500">Status</th>
+              </tr></thead>
+              <tbody class="divide-y divide-gray-50">
+                ${leaderboard.length ? leaderboard.map(c => `<tr class="hover:bg-gray-50">
+                  <td class="px-3 py-2"><p class="font-medium truncate max-w-[200px]">${esc(c.name)}</p></td>
+                  <td class="px-3 py-2 capitalize text-gray-500">${c.asset_type}</td>
+                  <td class="px-3 py-2 text-right font-medium ${Number(c.avg_ctr)>=1?'text-success':'text-gray-700'}">${fmtPct(c.avg_ctr)}</td>
+                  <td class="px-3 py-2 text-right">${fmtCurrency(c.total_spend)}</td>
+                  <td class="px-3 py-2 text-right">${Number(c.fatigue_score).toFixed(0)}/100</td>
+                  <td class="px-3 py-2 text-center">${fatigueBadge(c.fatigue_status)}</td>
+                </tr>`).join('') : '<tr><td colspan="6" class="text-center py-8 text-gray-400">No creatives indexed yet. Click Sync Creatives to start.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+  } catch { el.innerHTML = emptyState('Creative Hub', 'Connect your Meta ad account and sync creatives to see your Creative Intelligence dashboard.', 'fas fa-palette'); }
+}
+
+function fatigueBadge(status) {
+  const m = {healthy:'bg-green-100 text-green-700', early_warning:'bg-amber-100 text-amber-700', fatigued:'bg-orange-100 text-orange-700', critical:'bg-red-100 text-red-700'};
+  return `<span class="text-xs px-2 py-0.5 rounded-full font-medium ${m[status]||'bg-gray-100 text-gray-500'}">${(status||'unknown').replace('_',' ')}</span>`;
+}
+
+async function syncCreatives() {
+  try { await api.post('/creative/sync', { ad_account_id: state.currentWorkspace }); renderCreativeHub(); } catch(e) { alert('Sync failed: ' + (e.response?.data?.error?.message||'error')); }
+}
+
+// ---- A/B TESTING ----
+async function renderABTests() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-brand-500 text-2xl"></i></div>';
+  try {
+    const {data} = await api.get('/abtests');
+    const tests = data.data || [];
+    el.innerHTML = `
+      <div class="space-y-6 fade-in">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">${tests.length} A/B test(s)</p>
+            <p class="text-xs text-gray-400">Statistical significance engine with auto-winner detection</p>
+          </div>
+          <button onclick="showCreateABTest()" class="flex items-center gap-2 px-4 py-2 btn-primary text-white rounded-lg text-sm font-medium"><i class="fas fa-flask"></i> New A/B Test</button>
+        </div>
+        <div class="grid grid-cols-1 gap-4">
+          ${tests.length ? tests.map(t => `
+            <div class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <h4 class="font-semibold text-gray-900">${esc(t.name)}</h4>
+                  <p class="text-xs text-gray-400">${t.test_type} test · ${(t.variants||[]).length} variants</p>
+                </div>
+                ${statusBadge(t.status.toUpperCase())}
+              </div>
+              ${t.hypothesis ? `<p class="text-sm text-gray-600 mb-2"><i class="fas fa-lightbulb text-amber-400 mr-1"></i>${esc(t.hypothesis)}</p>` : ''}
+              <div class="flex items-center gap-4 text-xs text-gray-500">
+                <span><i class="fas fa-bullseye mr-1"></i>Metric: ${t.primary_metric}</span>
+                <span><i class="fas fa-chart-bar mr-1"></i>Confidence: ${((t.confidence_level||0.95)*100).toFixed(0)}%</span>
+                ${t.winner_variant_id ? `<span class="text-success font-medium"><i class="fas fa-trophy mr-1"></i>Winner found! +${(t.lift_percentage||0).toFixed(1)}% lift</span>` : ''}
+                ${t.started_at ? `<span><i class="fas fa-clock mr-1"></i>Started ${fmtDate(t.started_at)}</span>` : ''}
+              </div>
+            </div>
+          `).join('') : emptyState('A/B Tests', 'Create your first A/B test to measure what really works with statistical significance.', 'fas fa-flask')}
+        </div>
+      </div>`;
+  } catch { el.innerHTML = emptyState('A/B Testing', 'A/B testing with statistical significance engine.', 'fas fa-flask'); }
+}
+
+function showCreateABTest() {
+  openModal(`<div class="p-6"><h3 class="text-lg font-semibold mb-4"><i class="fas fa-flask text-brand-500 mr-2"></i>Create A/B Test</h3>
+    <form onsubmit="createABTest(event)" class="space-y-4">
+      <div><label class="block text-sm font-medium mb-1">Test Name</label><input id="ab-name" class="w-full px-3 py-2 border rounded-lg text-sm" required></div>
+      <div><label class="block text-sm font-medium mb-1">Test Type</label><select id="ab-type" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="creative">Creative</option><option value="audience">Audience</option><option value="copy">Copy</option><option value="placement">Placement</option><option value="budget">Budget</option></select></div>
+      <div><label class="block text-sm font-medium mb-1">Hypothesis</label><textarea id="ab-hypothesis" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g., Video ads will outperform static images for our target audience"></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">Primary Metric</label><select id="ab-metric" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="ctr">CTR</option><option value="cpc">CPC</option><option value="roas">ROAS</option><option value="conversion_rate">Conversion Rate</option></select></div>
+      <p class="text-xs text-gray-400">After creating, add variants and start the test.</p>
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="flex-1 py-2 btn-primary text-white rounded-lg text-sm font-medium">Create Test</button>
+        <button type="button" onclick="closeModal()" class="flex-1 py-2 border rounded-lg text-sm">Cancel</button>
+      </div>
+    </form></div>`);
+}
+
+async function createABTest(e) {
+  e.preventDefault();
+  try {
+    await api.post('/abtests', {
+      name: document.getElementById('ab-name').value,
+      test_type: document.getElementById('ab-type').value,
+      hypothesis: document.getElementById('ab-hypothesis').value,
+      primary_metric: document.getElementById('ab-metric').value,
+      variants: [
+        { name: 'Control', entity_type: 'campaign', entity_id: 'placeholder', traffic_split: 50, is_control: true },
+        { name: 'Variant B', entity_type: 'campaign', entity_id: 'placeholder', traffic_split: 50, is_control: false },
+      ],
+    });
+    closeModal(); renderABTests();
+  } catch(err) { alert(err.response?.data?.error?.message || 'Failed'); }
+}
+
+// ---- COMPETITOR INTELLIGENCE ----
+async function renderCompetitors() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-brand-500 text-2xl"></i></div>';
+  try {
+    const [compRes, landscapeRes] = await Promise.all([
+      api.get('/competitors').catch(() => null),
+      api.get('/competitors/landscape').catch(() => null),
+    ]);
+    const competitors = compRes?.data?.data || [];
+    const landscape = landscapeRes?.data?.data || {};
+
+    el.innerHTML = `
+      <div class="space-y-6 fade-in">
+        <div class="flex items-center justify-between">
+          <p class="text-sm text-gray-500">${competitors.length} competitor(s) tracked</p>
+          <button onclick="showAddCompetitor()" class="flex items-center gap-2 px-4 py-2 btn-primary text-white rounded-lg text-sm font-medium"><i class="fas fa-plus"></i> Add Competitor</button>
+        </div>
+
+        <!-- Competitors Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          ${competitors.length ? competitors.map(c => `
+            <div class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-lg bg-brand-100 flex items-center justify-center"><i class="fas fa-building text-brand-600"></i></div>
+                <div><h4 class="font-semibold text-sm">${esc(c.name)}</h4><p class="text-xs text-gray-400">${c.industry||'Unknown industry'}</p></div>
+              </div>
+              <div class="flex items-center gap-4 text-xs text-gray-500">
+                <span><i class="fas fa-ad mr-1"></i>${c.total_ads||0} ads</span>
+                <span class="text-success"><i class="fas fa-play mr-1"></i>${c.active_ads||0} active</span>
+              </div>
+              <div class="flex gap-2 mt-3">
+                <button onclick="fetchCompetitorAds('${c.id}')" class="text-xs text-brand-600 hover:underline"><i class="fas fa-download mr-1"></i>Fetch Ads</button>
+                ${c.meta_page_id ? '' : '<span class="text-xs text-gray-400">No Meta page ID</span>'}
+              </div>
+            </div>
+          `).join('') : ''}
+        </div>
+
+        <!-- Landscape Insights -->
+        ${(landscape.top_hooks||[]).length ? `
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-magnet text-rose-500 mr-2"></i>Top Hooks Used by Competitors</h3>
+            <div class="space-y-1">${landscape.top_hooks.map(([hook, count]) => `<div class="flex items-center justify-between py-1"><span class="text-sm capitalize">${esc(hook)}</span><span class="text-xs text-gray-400">${count}x</span></div>`).join('')}</div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-lightbulb text-amber-500 mr-2"></i>Actionable Insights</h3>
+            <div class="space-y-2">${(landscape.actionable_insights||[]).slice(0,5).map(i => `<div class="flex items-start gap-2 p-2 bg-amber-50 rounded"><i class="fas fa-arrow-right text-amber-500 mt-0.5 text-xs"></i><span class="text-sm">${esc(i)}</span></div>`).join('')}</div>
+          </div>
+        </div>` : ''}
+
+        ${!competitors.length ? emptyState('Competitor Intelligence', 'Track competitor ads from Meta Ad Library and get AI-powered analysis of their strategies.', 'fas fa-binoculars') : ''}
+      </div>`;
+  } catch { el.innerHTML = emptyState('Competitor Intelligence', 'Track competitor ads and strategies.', 'fas fa-binoculars'); }
+}
+
+function showAddCompetitor() {
+  openModal(`<div class="p-6"><h3 class="text-lg font-semibold mb-4"><i class="fas fa-binoculars text-brand-500 mr-2"></i>Add Competitor</h3>
+    <form onsubmit="addCompetitor(event)" class="space-y-4">
+      <div><label class="block text-sm font-medium mb-1">Competitor Name *</label><input id="comp-name" class="w-full px-3 py-2 border rounded-lg text-sm" required></div>
+      <div><label class="block text-sm font-medium mb-1">Meta Page ID</label><input id="comp-pageid" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g., 123456789"></div>
+      <div><label class="block text-sm font-medium mb-1">Website URL</label><input id="comp-url" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="https://competitor.com"></div>
+      <div><label class="block text-sm font-medium mb-1">Industry</label><input id="comp-industry" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g., E-commerce, SaaS"></div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="flex-1 py-2 btn-primary text-white rounded-lg text-sm font-medium">Add</button>
+        <button type="button" onclick="closeModal()" class="flex-1 py-2 border rounded-lg text-sm">Cancel</button>
+      </div>
+    </form></div>`);
+}
+
+async function addCompetitor(e) {
+  e.preventDefault();
+  try {
+    await api.post('/competitors', {
+      name: document.getElementById('comp-name').value,
+      meta_page_id: document.getElementById('comp-pageid').value || undefined,
+      website_url: document.getElementById('comp-url').value || undefined,
+      industry: document.getElementById('comp-industry').value || undefined,
+    });
+    closeModal(); renderCompetitors();
+  } catch(err) { alert(err.response?.data?.error?.message || 'Failed'); }
+}
+
+async function fetchCompetitorAds(id) {
+  try { const {data} = await api.post(`/competitors/${id}/fetch-ads`); alert(`${data.data?.imported||0} ads imported`); renderCompetitors(); } catch(e) { alert('Failed: ' + (e.response?.data?.error?.message||'error')); }
+}
+
+// ---- CROSS-CHANNEL ATTRIBUTION ----
+async function renderAttribution() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-brand-500 text-2xl"></i></div>';
+  try {
+    const days = state.dateRange;
+    const df = new Date(Date.now() - days * 864e5).toISOString().split('T')[0];
+    const dt = new Date().toISOString().split('T')[0];
+    const [channelsRes, reportRes] = await Promise.all([
+      api.get('/attribution/channels').catch(() => null),
+      api.get(`/attribution/report?date_from=${df}&date_to=${dt}`).catch(() => null),
+    ]);
+    const channels = channelsRes?.data?.data || [];
+    const report = reportRes?.data?.data || {};
+    const blended = report.blended || {};
+
+    el.innerHTML = `
+      <div class="space-y-6 fade-in">
+        <!-- Blended KPIs -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+          ${metricCard('Total Spend', fmtCurrency(blended.total_spend), null, 'fas fa-dollar-sign', 'brand')}
+          ${metricCard('Total Revenue', fmtCurrency(blended.total_revenue), null, 'fas fa-coins', 'emerald')}
+          ${metricCard('MER', (blended.mer||0).toFixed(2)+'x', null, 'fas fa-chart-line', 'violet')}
+          ${metricCard('Blended ROAS', (blended.blended_roas||0).toFixed(2)+'x', null, 'fas fa-trophy', 'amber')}
+          ${metricCard('Blended CAC', fmtCurrency(blended.blended_cac), null, 'fas fa-user-plus', 'cyan')}
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Channel Mix -->
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4"><i class="fas fa-project-diagram text-brand-500 mr-2"></i>Channel Mix</h3>
+            ${(report.channels||[]).length ? `<div class="space-y-3">
+              ${report.channels.map(c => `
+                <div class="flex items-center gap-3">
+                  <div class="w-20 text-sm font-medium capitalize">${esc(c.name)}</div>
+                  <div class="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden flex">
+                    <div class="h-full bg-brand-500 flex items-center justify-center text-white text-[10px]" style="width:${c.share_of_spend.toFixed(0)}%">${c.share_of_spend.toFixed(0)}%</div>
+                  </div>
+                  <div class="text-right text-xs text-gray-500 w-20">${fmtCurrency(c.spend)}</div>
+                  <div class="text-right text-xs font-medium w-16">${c.roas.toFixed(2)}x</div>
+                </div>
+              `).join('')}
+            </div>` : '<p class="text-sm text-gray-400 text-center py-4">No attribution data yet</p>'}
+          </div>
+
+          <!-- Channels -->
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-gray-700"><i class="fas fa-layer-group text-emerald-500 mr-2"></i>Channels (${channels.length})</h3>
+              <button onclick="importMetaAttribution()" class="text-xs text-brand-600 hover:underline"><i class="fas fa-sync-alt mr-1"></i>Import Meta Data</button>
+            </div>
+            <div class="space-y-2">
+              ${channels.map(c => `
+                <div class="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                  <div class="w-2 h-2 rounded-full ${c.is_active?'bg-success':'bg-gray-300'}"></div>
+                  <span class="text-sm font-medium capitalize">${esc(c.channel_name)}</span>
+                  <span class="text-xs text-gray-400">${c.channel_type}</span>
+                  ${c.last_imported_at ? `<span class="text-xs text-gray-400 ml-auto">Last: ${fmtDate(c.last_imported_at)}</span>` : ''}
+                </div>
+              `).join('') || '<p class="text-sm text-gray-400 text-center py-4">No channels configured</p>'}
+            </div>
+          </div>
+        </div>
+      </div>`;
+  } catch { el.innerHTML = emptyState('Cross-Channel Attribution', 'Track spend and revenue across all marketing channels for blended ROAS and MER.', 'fas fa-project-diagram'); }
+}
+
+async function importMetaAttribution() {
+  try { await api.post('/attribution/import-meta'); await api.post('/attribution/calculate-blended'); renderAttribution(); } catch(e) { alert('Import failed'); }
+}
+
+// ---- HEALTH AUDIT ----
+async function renderAudit() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-brand-500 text-2xl"></i></div>';
+  try {
+    const [recsRes, historyRes] = await Promise.all([
+      api.get('/audit/recommendations').catch(() => null),
+      api.get('/audit/history').catch(() => null),
+    ]);
+    const recs = recsRes?.data?.data || [];
+    const history = historyRes?.data?.data || [];
+    const latestAudit = history[0];
+
+    el.innerHTML = `
+      <div class="space-y-6 fade-in">
+        <!-- Health Score -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          ${metricCard('Health Score', latestAudit ? (Number(latestAudit.health_score).toFixed(0)+'/100') : 'N/A', null, 'fas fa-heartbeat', latestAudit?.health_score >= 80 ? 'emerald' : latestAudit?.health_score >= 60 ? 'amber' : 'rose')}
+          ${metricCard('Pending Recs', recs.length, null, 'fas fa-clipboard-check', 'brand')}
+          ${metricCard('Issues Found', latestAudit?.issues_found || 0, null, 'fas fa-exclamation-triangle', 'amber')}
+          ${metricCard('Entities Scanned', latestAudit?.entities_scanned || 0, null, 'fas fa-search', 'blue')}
+        </div>
+
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-gray-700">Last audit: ${latestAudit ? fmtDate(latestAudit.started_at) : 'Never'}</h3>
+          <button onclick="runAudit()" id="audit-btn" class="flex items-center gap-2 px-4 py-2 btn-primary text-white rounded-lg text-sm font-medium"><i class="fas fa-stethoscope"></i> Run Audit Now</button>
+        </div>
+
+        <!-- Pending Recommendations -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 class="text-sm font-semibold text-gray-700 mb-4"><i class="fas fa-magic text-brand-500 mr-2"></i>AI Recommendations (${recs.length})</h3>
+          <div class="space-y-3">
+            ${recs.length ? recs.map(r => `
+              <div class="p-4 rounded-lg border ${r.priority==='critical'?'border-red-200 bg-red-50':r.priority==='high'?'border-amber-200 bg-amber-50':'border-gray-200'}">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-xs px-1.5 py-0.5 rounded ${r.priority==='critical'?'bg-red-100 text-red-700':r.priority==='high'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-600'}">${r.priority}</span>
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-brand-50 text-brand-600">${(r.category||'').replace(/_/g,' ')}</span>
+                  <h4 class="text-sm font-medium flex-1">${esc(r.title)}</h4>
+                </div>
+                <p class="text-sm text-gray-600 mb-2">${esc(r.description)}</p>
+                ${r.rationale ? `<p class="text-xs text-gray-400 mb-2"><i class="fas fa-chart-bar mr-1"></i>${esc(r.rationale)}</p>` : ''}
+                <div class="flex gap-2">
+                  <button onclick="applyRecommendation('${r.id}')" class="text-xs px-3 py-1 btn-primary text-white rounded font-medium"><i class="fas fa-check mr-1"></i>Apply</button>
+                  <button onclick="dismissRecommendation('${r.id}')" class="text-xs px-3 py-1 border rounded text-gray-500 hover:bg-gray-50"><i class="fas fa-times mr-1"></i>Dismiss</button>
+                </div>
+              </div>
+            `).join('') : '<p class="text-sm text-gray-400 text-center py-6">No pending recommendations. Run an audit to generate AI-powered recommendations.</p>'}
+          </div>
+        </div>
+
+        <!-- Audit History -->
+        ${history.length ? `
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-history text-gray-400 mr-2"></i>Audit History</h3>
+          <div class="space-y-2">
+            ${history.slice(0,5).map(a => `
+              <div class="flex items-center gap-3 py-2 border-b border-gray-50">
+                <div class="w-10 h-10 rounded-lg ${Number(a.health_score)>=80?'bg-emerald-100':Number(a.health_score)>=60?'bg-amber-100':'bg-red-100'} flex items-center justify-center">
+                  <span class="text-sm font-bold ${Number(a.health_score)>=80?'text-emerald-700':Number(a.health_score)>=60?'text-amber-700':'text-red-700'}">${Number(a.health_score).toFixed(0)}</span>
+                </div>
+                <div class="flex-1"><p class="text-sm">${a.run_type} audit · ${a.entities_scanned} scanned</p><p class="text-xs text-gray-400">${fmtDate(a.started_at)} · ${a.processing_time_ms?((a.processing_time_ms/1000).toFixed(1)+'s'):'N/A'}</p></div>
+                <span class="text-xs ${a.status==='completed'?'text-success':'text-danger'}">${a.status}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>` : ''}
+      </div>`;
+  } catch { el.innerHTML = emptyState('Health Audit', 'AI-powered account health audits with actionable recommendations.', 'fas fa-stethoscope'); }
+}
+
+async function runAudit() {
+  const btn = document.getElementById('audit-btn');
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Running Audit...';
+  btn.disabled = true;
+  try { await api.post('/audit/run'); renderAudit(); }
+  catch(e) { alert('Audit failed: ' + (e.response?.data?.error?.message||'error')); }
+  finally { btn.innerHTML = '<i class="fas fa-stethoscope mr-2"></i>Run Audit Now'; btn.disabled = false; }
+}
+
+async function applyRecommendation(id) {
+  try { await api.post(`/audit/recommendations/${id}/apply`); renderAudit(); } catch { alert('Failed to apply'); }
+}
+
+async function dismissRecommendation(id) {
+  try { await api.post(`/audit/recommendations/${id}/dismiss`, { reason: 'User dismissed' }); renderAudit(); } catch { alert('Failed to dismiss'); }
+}
+
+// ---- CAPI TRACKING ----
+async function renderCAPI() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-brand-500 text-2xl"></i></div>';
+  try {
+    const [configsRes, statsRes] = await Promise.all([
+      api.get('/capi/configurations').catch(() => null),
+      api.get('/capi/stats').catch(() => null),
+    ]);
+    const configs = configsRes?.data?.data || [];
+    const stats = statsRes?.data?.data || {};
+
+    el.innerHTML = `
+      <div class="space-y-6 fade-in">
+        <div class="bg-gradient-to-r from-brand-600 to-brand-800 rounded-xl p-6 text-white">
+          <div class="flex items-center gap-3 mb-2">
+            <i class="fas fa-server text-2xl"></i>
+            <div>
+              <h3 class="text-lg font-semibold">Meta Conversions API (CAPI)</h3>
+              <p class="text-sm text-brand-200">Server-side event tracking with automatic deduplication</p>
+            </div>
+          </div>
+          <p class="text-sm text-brand-100 mt-2"><i class="fas fa-shield-alt mr-1"></i>iOS 14.5+ causes 20-30% conversion under-reporting. CAPI recovers lost signals through server-side tracking.</p>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          ${metricCard('Pixels Configured', configs.length, null, 'fas fa-crosshairs', 'brand')}
+          ${metricCard('Events Sent Today', configs.reduce((s,c)=>s+(c.events_sent_today||0),0), null, 'fas fa-paper-plane', 'emerald')}
+          ${metricCard('Events Deduped', configs.reduce((s,c)=>s+(c.events_deduped_today||0),0), null, 'fas fa-filter', 'amber')}
+          ${metricCard('Active', configs.filter(c=>c.is_active).length, null, 'fas fa-check-circle', 'cyan')}
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-gray-700"><i class="fas fa-cog text-gray-400 mr-2"></i>Pixel Configurations</h3>
+            <button onclick="showConfigureCAPI()" class="text-xs text-brand-600 hover:underline"><i class="fas fa-plus mr-1"></i>Add Pixel</button>
+          </div>
+          ${configs.length ? `<div class="space-y-3">${configs.map(c => `
+            <div class="p-4 rounded-lg border ${c.last_error?'border-red-200 bg-red-50':'border-gray-200'}">
+              <div class="flex items-center justify-between mb-1">
+                <div class="flex items-center gap-2">
+                  <div class="w-2 h-2 rounded-full ${c.is_active?'bg-success':'bg-gray-300'}"></div>
+                  <span class="text-sm font-medium">Pixel: ${esc(c.pixel_id)}</span>
+                  <span class="text-xs text-gray-400">${esc(c.account_name||'')}</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-4 text-xs text-gray-500 mt-2">
+                <span><i class="fas fa-paper-plane mr-1"></i>${c.events_sent_today||0} sent today</span>
+                <span><i class="fas fa-filter mr-1"></i>${c.events_deduped_today||0} deduped</span>
+                ${c.last_event_at ? `<span><i class="fas fa-clock mr-1"></i>Last: ${fmtDate(c.last_event_at)}</span>` : ''}
+                ${c.last_error ? `<span class="text-danger"><i class="fas fa-exclamation-circle mr-1"></i>${esc(c.last_error.substring(0,60))}</span>` : ''}
+              </div>
+            </div>
+          `).join('')}</div>` : '<p class="text-sm text-gray-400 text-center py-6">No CAPI pixels configured. Add a pixel to start server-side tracking.</p>'}
+        </div>
+      </div>`;
+  } catch { el.innerHTML = emptyState('CAPI Tracking', 'Configure Meta Conversions API for server-side event tracking.', 'fas fa-server'); }
+}
+
+function showConfigureCAPI() {
+  openModal(`<div class="p-6"><h3 class="text-lg font-semibold mb-4"><i class="fas fa-server text-brand-500 mr-2"></i>Configure CAPI Pixel</h3>
+    <form onsubmit="configureCAPI(event)" class="space-y-4">
+      <div><label class="block text-sm font-medium mb-1">Pixel ID *</label><input id="capi-pixel" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g., 123456789" required></div>
+      <div><label class="block text-sm font-medium mb-1">Ad Account ID *</label><input id="capi-account" class="w-full px-3 py-2 border rounded-lg text-sm" required></div>
+      <p class="text-xs text-gray-400">Access token is inherited from your connected ad account.</p>
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="flex-1 py-2 btn-primary text-white rounded-lg text-sm font-medium">Configure</button>
+        <button type="button" onclick="closeModal()" class="flex-1 py-2 border rounded-lg text-sm">Cancel</button>
+      </div>
+    </form></div>`);
+}
+
+async function configureCAPI(e) {
+  e.preventDefault();
+  try {
+    await api.post('/capi/configure', {
+      pixel_id: document.getElementById('capi-pixel').value,
+      ad_account_id: document.getElementById('capi-account').value,
+    });
+    closeModal(); renderCAPI();
+  } catch(err) { alert(err.response?.data?.error?.message || 'Failed'); }
+}
