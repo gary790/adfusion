@@ -1,0 +1,47 @@
+# ============================================
+# AD FUSION - App Engine Flexible (app.yaml)
+# Deploy: gcloud app deploy
+# ============================================
+
+runtime: custom
+env: flex
+
+service: default
+
+automatic_scaling:
+  min_num_instances: 1
+  max_num_instances: 10
+  cpu_utilization:
+    target_utilization: 0.65
+  target_concurrent_requests: 80
+
+resources:
+  cpu: 1
+  memory_gb: 0.5
+  disk_size_gb: 10
+
+network:
+  forwarded_ports: []
+
+liveness_check:
+  path: /health
+  check_interval_sec: 30
+  timeout_sec: 10
+  failure_threshold: 3
+  success_threshold: 2
+  initial_delay_sec: 15
+
+readiness_check:
+  path: /health
+  check_interval_sec: 10
+  timeout_sec: 5
+  failure_threshold: 3
+  success_threshold: 2
+
+env_variables:
+  NODE_ENV: production
+  PORT: '8080'
+
+# Secrets must be set via:
+# gcloud app deploy --set-env-vars="KEY=VALUE"
+# Or use Google Secret Manager with runtime access

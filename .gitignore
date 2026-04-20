@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.dev.vars
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+
+# Docker volumes
+.docker/
+
+# Testing
+coverage/
+
+# Runtime
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# PM2
+.pm2/
+
+# Backup
+*.backup
+*.bak
+*.tar.gz
+*.zip
+
+# Wrangler (if ever used)
+.wrangler/

@@ -1,0 +1,143 @@
+# ============================================
+# AD FUSION - Docker Compose
+# PostgreSQL 16 + Redis 7 + Node.js App
+# ============================================
+
+version: '3.9'
+
+services:
+  # --- PostgreSQL Database ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: adfusion-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: adfusion
+      POSTGRES_USER: adfusion
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-adfusion_secret}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adfusion -d adfusion"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - adfusion-net
+
+  # --- Redis Cache & Queue ---
+  redis:
+    image: redis:7-alpine
+    container_name: adfusion-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - adfusion-net
+
+  # --- Ad Fusion App ---
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: adfusion-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Database
+      DATABASE_URL: postgres://adfusion:${DB_PASSWORD:-adfusion_secret}@postgres:5432/adfusion
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: adfusion
+      DB_USER: adfusion
+      DB_PASSWORD: ${DB_PASSWORD:-adfusion_secret}
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # Security (override in .env)
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-me-32-char-hex-key-here!}
+      ENCRYPTION_IV: ${ENCRYPTION_IV:-change-16-char-iv}
+      # External APIs (provide via .env file)
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_REDIRECT_URI: ${META_REDIRECT_URI:-http://localhost:3000/api/auth/meta/callback}
+      META_WEBHOOK_VERIFY_TOKEN: ${META_WEBHOOK_VERIFY_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # GCP (optional)
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-}
+      GCP_REGION: ${GCP_REGION:-us-central1}
+      # App
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - app_logs:/app/logs
+    networks:
+      - adfusion-net
+
+  # --- Background Job Runner (separate process) ---
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: adfusion-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://adfusion:${DB_PASSWORD:-adfusion_secret}@postgres:5432/adfusion
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: adfusion
+      DB_USER: adfusion
+      DB_PASSWORD: ${DB_PASSWORD:-adfusion_secret}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-me-32-char-hex-key-here!}
+      ENCRYPTION_IV: ${ENCRYPTION_IV:-change-16-char-iv}
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    command: ["node", "dist/jobs/runner.js"]
+    volumes:
+      - app_logs:/app/logs
+    networks:
+      - adfusion-net
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  app_logs:
+    driver: local
+
+networks:
+  adfusion-net:
+    driver: bridge

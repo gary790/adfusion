@@ -1,0 +1,341 @@
+# ============================================
+# AD FUSION - GKE Deployment
+# Kubernetes manifests for Google Kubernetes Engine
+# ============================================
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: adfusion
+
+---
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adfusion-config
+  namespace: adfusion
+data:
+  NODE_ENV: production
+  PORT: "3000"
+  DB_HOST: adfusion-postgres-svc
+  DB_PORT: "5432"
+  DB_NAME: adfusion
+  DB_USER: adfusion
+  REDIS_URL: redis://adfusion-redis-svc:6379
+  META_API_VERSION: v21.0
+  META_GRAPH_API_BASE: https://graph.facebook.com
+  CORS_ORIGIN: https://adfusion.example.com
+
+---
+# Secrets (use kubectl create secret or external-secrets operator in production)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: adfusion-secrets
+  namespace: adfusion
+type: Opaque
+stringData:
+  DB_PASSWORD: "CHANGE_ME"
+  JWT_SECRET: "CHANGE_ME"
+  SESSION_SECRET: "CHANGE_ME"
+  ENCRYPTION_KEY: "CHANGE_ME_32_CHARS_HEX"
+  ENCRYPTION_IV: "CHANGE_16_CHARS"
+  META_APP_ID: "YOUR_META_APP_ID"
+  META_APP_SECRET: "YOUR_META_APP_SECRET"
+  META_WEBHOOK_VERIFY_TOKEN: "YOUR_WEBHOOK_TOKEN"
+  OPENAI_API_KEY: "YOUR_OPENAI_KEY"
+  STRIPE_SECRET_KEY: "YOUR_STRIPE_KEY"
+  STRIPE_WEBHOOK_SECRET: "YOUR_STRIPE_WEBHOOK_SECRET"
+
+---
+# Main App Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adfusion-app
+  namespace: adfusion
+  labels:
+    app: adfusion
+    component: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: adfusion
+      component: web
+  template:
+    metadata:
+      labels:
+        app: adfusion
+        component: web
+    spec:
+      containers:
+        - name: adfusion
+          image: gcr.io/PROJECT_ID/adfusion:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: adfusion-config
+            - secretRef:
+                name: adfusion-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            failureThreshold: 10
+            periodSeconds: 5
+
+---
+# Worker Deployment (background jobs)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adfusion-worker
+  namespace: adfusion
+  labels:
+    app: adfusion
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adfusion
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: adfusion
+        component: worker
+    spec:
+      containers:
+        - name: worker
+          image: gcr.io/PROJECT_ID/adfusion:latest
+          command: ["node", "dist/jobs/runner.js"]
+          envFrom:
+            - configMapRef:
+                name: adfusion-config
+            - secretRef:
+                name: adfusion-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: adfusion-svc
+  namespace: adfusion
+spec:
+  type: ClusterIP
+  selector:
+    app: adfusion
+    component: web
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+
+---
+# Ingress (GKE managed certificate + load balancer)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: adfusion-ingress
+  namespace: adfusion
+  annotations:
+    kubernetes.io/ingress.class: gce
+    kubernetes.io/ingress.global-static-ip-name: adfusion-ip
+    networking.gke.io/managed-certificates: adfusion-cert
+spec:
+  defaultBackend:
+    service:
+      name: adfusion-svc
+      port:
+        number: 80
+
+---
+# Managed Certificate (replace with your domain)
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: adfusion-cert
+  namespace: adfusion
+spec:
+  domains:
+    - adfusion.example.com
+
+---
+# HPA (Horizontal Pod Autoscaler)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: adfusion-hpa
+  namespace: adfusion
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: adfusion-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# PostgreSQL StatefulSet (for dev/staging — use Cloud SQL for production)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: adfusion-postgres
+  namespace: adfusion
+spec:
+  serviceName: adfusion-postgres-svc
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adfusion
+      component: postgres
+  template:
+    metadata:
+      labels:
+        app: adfusion
+        component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: adfusion
+            - name: POSTGRES_USER
+              value: adfusion
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: adfusion-secrets
+                  key: DB_PASSWORD
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: adfusion-postgres-svc
+  namespace: adfusion
+spec:
+  type: ClusterIP
+  selector:
+    app: adfusion
+    component: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+
+---
+# Redis StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: adfusion-redis
+  namespace: adfusion
+spec:
+  serviceName: adfusion-redis-svc
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adfusion
+      component: redis
+  template:
+    metadata:
+      labels:
+        app: adfusion
+        component: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: adfusion-redis-svc
+  namespace: adfusion
+spec:
+  type: ClusterIP
+  selector:
+    app: adfusion
+    component: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
