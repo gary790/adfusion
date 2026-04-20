@@ -1,250 +1,254 @@
-# Ad Fusion
+# Ad Fusion - Meta Ad Creator & Optimizer SaaS
 
-**AI-Powered Meta (Facebook) Ad Creator & Optimizer — Multi-Tenant SaaS Platform**
-
-Ad Fusion is a production-ready SaaS platform that helps advertisers manage, optimize, and scale their Meta (Facebook/Instagram) ad campaigns using AI-driven insights, automated rules, and real-time analytics.
+A production-grade, full-stack SaaS platform for managing, optimizing, and automating Meta (Facebook/Instagram) advertising campaigns using AI-powered insights.
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        FRONTEND SPA                              │
-│   Tailwind CSS + Chart.js + Vanilla JS                          │
-│   Dashboard | Campaigns | Ad Creator | AI Studio | Automation   │
-│   Billing | Settings                                             │
-└────────────────────────────┬────────────────────────────────────┘
-                             │ REST API (JSON)
-┌────────────────────────────▼────────────────────────────────────┐
-│                     EXPRESS API GATEWAY                          │
-│   Auth (JWT + Meta OAuth) | Rate Limiting | RBAC | Validation   │
-├──────────┬──────────┬──────────┬──────────┬─────────────────────┤
-│ Auth     │ Campaign │ AI       │ Automtn  │ Billing  │ Webhook  │
-│ Service  │ Service  │ Engine   │ Engine   │ Service  │ Handler  │
-│          │          │(OpenAI)  │          │(Stripe)  │          │
-├──────────┴──────────┴──────────┴──────────┴──────────┴──────────┤
-│                  META MARKETING API CLIENT                       │
-│   Campaigns | Ad Sets | Ads | Insights | Audiences | Sync       │
-├─────────────┬─────────────────────┬─────────────────────────────┤
-│ PostgreSQL  │      Redis          │   Background Jobs           │
-│ (Primary)   │  (Cache + Queue)    │  (Cron: sync, rules, etc.)  │
-└─────────────┴─────────────────────┴─────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Frontend (SPA)                            │
+│  Vanilla JS + Tailwind CSS + Chart.js                       │
+│  Auth · Dashboard · Campaigns · AI Engine · Automation       │
+│  Copy Generator · Ad Accounts · Billing · Settings          │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ REST API (JSON)
+┌──────────────────────▼──────────────────────────────────────┐
+│                 Node.js / Express Backend                    │
+│  JWT + Meta OAuth · Helmet · CORS · Rate Limiting           │
+├─────────────┬──────────────┬───────────────┬────────────────┤
+│ Auth Routes │Campaign CRUD │ AI Engine     │ Automation     │
+│ Dashboard   │ Ad Sets/Ads  │ Copy Gen      │ Rule Engine    │
+│ Billing     │ Insights Sync│ Fatigue Detect│ Budget Actions │
+├─────────────┴──────────────┴───────────────┴────────────────┤
+│                    Services Layer                            │
+│  MetaApiClient · MetaSyncService · AIOptimizationEngine     │
+│  AutomationEngine · Stripe Integration                      │
+├─────────────┬──────────────┬───────────────┬────────────────┤
+│ PostgreSQL  │    Redis     │  Meta Graph   │   OpenAI       │
+│ (Data Store)│   (Cache)    │    API v21    │  GPT-4o        │
+└─────────────┴──────────────┴───────────────┴────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────────┐
+│              Background Job Runner (Cron)                    │
+│  10min: Incremental Sync · 2AM: Full Sync                   │
+│  30min: Rule Evaluation  · 9AM: Token Check                 │
+│  Weekly: Data Cleanup                                        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Features
 
 ### Core Platform
-- **Multi-Tenant Architecture** — Workspace-based isolation with RBAC (Owner, Admin, Manager, Analyst, Viewer)
-- **Meta OAuth Integration** — One-click Facebook login, long-lived token management, multiple ad account support
-- **Real-Time Dashboard** — Spend trends, CTR, CPC, CPM, frequency, top campaigns, top ads, notifications
+- **Multi-tenant workspaces** with role-based access control (Owner, Admin, Manager, Analyst, Viewer)
+- **Facebook/Meta OAuth** with long-lived token management and automatic refresh
+- **Multiple ad account** support per workspace with health monitoring
+- **Real-time sync** with Meta Marketing API (campaigns, ad sets, ads, insights)
 
-### Campaign Management
-- **Full CRUD** — Create, read, update, delete campaigns via Meta Marketing API
-- **Bulk Sync** — Incremental (10min) + full (daily) data synchronization
-- **Deep Analytics** — 30-day performance trends, ad set breakdown, granular filtering
+### AI-Powered Optimization (OpenAI GPT-4o)
+- **Campaign Performance Diagnosis** - Deep analysis with findings, recommendations, and predicted impact
+- **Ad Copy Generator** - Multi-variation copy using AIDA, PAS, BAB, FAB, PASTOR, and more frameworks
+- **Headline Generator** - 10+ headlines per request with hook type classification
+- **Creative Fatigue Detection** - Algorithmic + AI detection (frequency, CTR decline, CPM spike)
+- **Scaling Readiness Check** - Data-driven scoring with blocker identification
+- **Budget Optimization** - AI-recommended allocation across campaigns
+- **Audience Recommendations** - Targeting improvements based on performance data
 
-### AI Optimization Engine (GPT-4o)
-- **Campaign Analysis** — Automated performance diagnosis with severity-ranked findings
-- **Ad Copy Generator** — Multi-framework copy generation (AIDA, PAS, BAB, FAB, PASTOR, etc.)
-- **Headline Generator** — Batch headline creation with hook-type diversity scoring
-- **Creative Fatigue Detection** — Algorithmic + AI detection of frequency spikes and CTR decline
-- **Scaling Readiness** — Data-driven assessment with budget recommendations
-- **Audience Recommender** — Targeting expansion suggestions based on performance data
-- **Budget Optimizer** — AI-powered cross-campaign budget allocation
+### Rule-Based Automation Engine
+- **Condition-based rules** with AND/OR logic across any metric (CTR, CPC, CPM, ROAS, frequency, spend, etc.)
+- **Automated actions**: pause, activate, increase/decrease budget, send notification
+- **Safety guards**: 20% max budget increase cap, $1 minimum budget floor, cooldown periods
+- **Pre-built templates**: Stop Losers, Scale Winners, Creative Fatigue, Budget Protection, High CPM Alert
+- **Execution history** with full audit trail
 
-### Automation Engine
-- **Rule-Based Actions** — Pause losers, scale winners, fatigue alerts, budget protection
-- **Flexible Conditions** — AND/OR logic on spend, CTR, CPC, CPM, ROAS, frequency, etc.
-- **Meta API Execution** — Rules directly update campaign/ad set/ad status and budgets via API
-- **Preset Templates** — 5 pre-built rules (Stop Losers, Scale Winners, Creative Fatigue, Budget Protection, High CPM Alert)
-- **Execution History** — Full audit trail with condition details and action results
+### Dashboard & Analytics
+- **Real-time KPIs** with period-over-period comparison (spend, impressions, clicks, CTR, CPC, CPM, reach, frequency)
+- **Interactive charts** (spend trend, CTR/CPC dual-axis)
+- **Top campaigns and top ads** ranking tables
+- **Notification center** with in-app alerts for rule triggers, token expiration, and system events
 
-### Billing (Stripe)
-- **4-Tier Plans** — Free, Starter ($49/mo), Professional ($149/mo), Enterprise ($499/mo)
-- **Usage Tracking** — AI requests, API calls, entity counts per billing period
-- **Stripe Checkout** — Seamless subscription creation with 14-day free trial
-- **Customer Portal** — Self-service subscription management
-
-### Infrastructure
-- **PostgreSQL** — 16 tables with proper indexes, triggers, JSONB columns, UUID PKs
-- **Redis** — Response caching (configurable TTL), rate limit storage
-- **Background Jobs** — 5 cron jobs (incremental sync, full sync, rule evaluation, token checks, cleanup)
-- **Webhooks** — Meta real-time updates + Stripe subscription lifecycle events
+### Billing & Subscriptions (Stripe)
+- **4-tier plans**: Free, Starter ($49/mo), Professional ($149/mo), Enterprise ($499/mo)
+- **Usage tracking** per workspace (AI requests, API calls, syncs)
+- **Stripe Checkout** integration with 14-day free trial
+- **Customer portal** for subscription management
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Tailwind CSS, Chart.js, Font Awesome, Vanilla JS SPA |
-| Backend | Node.js 20, Express 4, TypeScript 5 |
-| Database | PostgreSQL 16 |
-| Cache | Redis 7 (via ioredis) |
-| AI | OpenAI GPT-4o |
-| Ads API | Meta Marketing API v21.0 |
-| Billing | Stripe (Subscriptions, Checkout, Webhooks) |
-| Auth | JWT (access + refresh tokens), Meta OAuth 2.0 |
-| Jobs | node-cron (cron scheduling) |
-| Logging | Winston (structured JSON logging) |
-| Validation | express-validator, Zod |
-| Security | Helmet CSP, CORS, rate limiting, AES-256-CBC encryption, bcrypt |
-| Container | Docker, docker-compose |
-| Deploy | Google Cloud Run, GKE, App Engine |
+| **Frontend** | Vanilla JS SPA, Tailwind CSS (CDN), Chart.js, Axios, Font Awesome |
+| **Backend** | Node.js 20+, Express 4.21, TypeScript 5.6 |
+| **Database** | PostgreSQL 16 (17 tables, full migrations, triggers) |
+| **Cache** | Redis 7 (IoRedis client, key-based invalidation) |
+| **Auth** | JWT (access + refresh tokens), bcrypt, Meta OAuth 2.0 |
+| **AI** | OpenAI GPT-4o (structured JSON output, temperature tuning) |
+| **Payments** | Stripe (Checkout, Billing Portal, Webhooks) |
+| **Meta API** | Graph API v21.0 (campaigns, ad sets, ads, insights, audiences) |
+| **Jobs** | node-cron (5 scheduled tasks), background process |
+| **Security** | Helmet CSP, CORS, rate limiting, AES-256 token encryption |
+| **Logging** | Winston (file rotation, structured logging) |
+| **Testing** | Jest + ts-jest (51 tests) |
+| **Docker** | Multi-stage build, docker-compose (app + worker + PostgreSQL + Redis) |
 
 ## Project Structure
 
 ```
 ad-fusion/
 ├── src/
-│   ├── server.ts                    # Express app + middleware + routes
+│   ├── server.ts                    # Express app entry point
 │   ├── config/
-│   │   ├── index.ts                 # Centralized config (env vars, thresholds)
-│   │   ├── database.ts              # PostgreSQL pool + query helpers
-│   │   └── redis.ts                 # Redis client + cache helpers
+│   │   ├── index.ts                 # All configuration (env vars, thresholds)
+│   │   ├── database.ts              # PostgreSQL pool, query helpers, transactions
+│   │   └── redis.ts                 # Redis cache client with retry
 │   ├── middleware/
-│   │   └── auth.ts                  # JWT auth, workspace RBAC, role guard
+│   │   └── auth.ts                  # JWT auth, workspace RBAC, token generation
 │   ├── routes/
-│   │   ├── auth.ts                  # Signup, login, refresh, Meta OAuth
-│   │   ├── campaigns.ts             # Campaign CRUD, sync, insights
-│   │   ├── ai.ts                    # AI analysis, copy gen, headlines
-│   │   ├── automation.ts            # Rule CRUD, manual run, presets
-│   │   ├── dashboard.ts             # Summary, trends, top performers
-│   │   └── billing.ts              # Plans, checkout, portal, status
+│   │   ├── auth.ts                  # Signup, Login, Meta OAuth, Token refresh
+│   │   ├── campaigns.ts             # Campaign CRUD + sync + metrics
+│   │   ├── ai.ts                    # AI analysis, copy gen, fatigue, scaling
+│   │   ├── automation.ts            # Rule CRUD, manual trigger, presets
+│   │   ├── dashboard.ts             # Summary, trends, top items, notifications
+│   │   └── billing.ts               # Plans, checkout, portal, usage
 │   ├── services/
 │   │   ├── meta/
-│   │   │   ├── client.ts            # Meta Graph API client (Axios)
-│   │   │   └── sync.ts              # Full + incremental data sync
+│   │   │   ├── client.ts            # Full Meta Graph API client (CRUD + insights)
+│   │   │   └── sync.ts              # Full + incremental sync service
 │   │   ├── ai/
-│   │   │   └── engine.ts            # OpenAI integration + fatigue/scaling
+│   │   │   └── engine.ts            # AI optimization engine (GPT-4o)
 │   │   └── automation/
-│   │       └── engine.ts            # Rule evaluation + action execution
+│   │       └── engine.ts            # Rule evaluation & action execution
 │   ├── webhooks/
-│   │   └── handler.ts               # Meta + Stripe webhook processing
+│   │   └── handler.ts               # Meta webhooks + Stripe webhooks
 │   ├── jobs/
-│   │   └── runner.ts                # Cron job scheduler (5 jobs)
-│   ├── types/
-│   │   └── index.ts                 # TypeScript interfaces (500+ lines)
-│   └── utils/
-│       ├── helpers.ts               # UUID, pagination, retry, formatting
-│       ├── encryption.ts            # AES-256-CBC encrypt/decrypt
-│       └── logger.ts                # Winston structured logger
+│   │   └── runner.ts                # Cron jobs (sync, rules, cleanup)
+│   ├── utils/
+│   │   ├── encryption.ts            # AES-256-CBC encrypt/decrypt
+│   │   ├── helpers.ts               # UUID, responses, pagination, retry
+│   │   └── logger.ts                # Winston logger with rotation
+│   └── types/
+│       └── index.ts                 # 500+ lines of TypeScript interfaces
 ├── public/
-│   ├── index.html                   # SPA shell
-│   └── static/js/app.js            # Complete frontend application
+│   ├── index.html                   # SPA shell with sidebar navigation
+│   └── static/
+│       └── app.js                   # Full frontend (930+ lines)
 ├── migrations/
-│   └── 001_initial_schema.sql       # Full PostgreSQL schema (430 lines)
+│   └── 001_initial_schema.sql       # Complete schema (17 tables, indexes, triggers)
 ├── tests/
-│   ├── unit/
-│   │   ├── auth.test.ts             # Auth & encryption tests
-│   │   └── ai-engine.test.ts        # AI engine & automation tests
-│   └── integration/
+│   └── unit/
+│       ├── auth.test.ts             # Auth, encryption, utility tests
+│       ├── ai-engine.test.ts        # AI engine, automation, threshold tests
+│       └── api-routes.test.ts       # API routes, config, schema validation
 ├── deploy/
-│   ├── cloud-run/service.yaml       # Cloud Run service config
-│   ├── gke/k8s.yaml                # Full Kubernetes manifests
-│   └── app-engine/app.yaml          # App Engine Flexible config
+│   ├── cloud-run/service.yaml       # Cloud Run Knative service definition
+│   ├── gke/k8s.yaml                 # Full GKE manifests (app, worker, DB, Redis, HPA)
+│   └── app-engine/app.yaml          # App Engine Flexible configuration
 ├── scripts/
-│   ├── setup.sh                     # Local dev setup
-│   └── deploy-gcp.sh               # GCP deployment automation
-├── Dockerfile                       # Multi-stage Node.js build
-├── docker-compose.yml               # PostgreSQL + Redis + App + Worker
-├── .dockerignore
-├── cloudbuild.yaml                  # Google Cloud Build pipeline
-├── package.json
-├── tsconfig.json
-├── .env.example                     # Environment template
-├── .gitignore
+│   ├── setup.sh                     # Local development setup
+│   └── deploy-gcp.sh               # Automated GCP deployment (9 steps)
+├── Dockerfile                       # Multi-stage build (builder → production)
+├── docker-compose.yml               # Full stack (app + worker + PostgreSQL + Redis)
+├── cloudbuild.yaml                  # Cloud Build CI/CD pipeline
+├── .dockerignore                    # Docker build exclusions
+├── .env.example                     # Environment variable template
+├── .gitignore                       # Git exclusions
 ├── seed.sql                         # Development seed data
-└── README.md
+├── jest.config.ts                   # Jest test configuration
+├── tsconfig.json                    # TypeScript configuration
+├── package.json                     # Dependencies and scripts
+└── README.md                        # This file
 ```
 
 ## Quick Start
 
 ### Prerequisites
-- Node.js >= 20
-- PostgreSQL 16+
-- Redis 7+
-- Docker & Docker Compose (optional but recommended)
+- Node.js 20+
+- Docker & Docker Compose (for PostgreSQL & Redis)
+- Meta Developer App (for Facebook/Instagram integration)
+- OpenAI API key (for AI features)
+- Stripe account (for billing, optional)
 
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/your-org/ad-fusion.git
+git clone https://github.com/YOUR_USERNAME/ad-fusion.git
 cd ad-fusion
 npm ci
 ```
 
-### 2. Configure Environment
+### 2. Environment Setup
 
 ```bash
 cp .env.example .env
 # Edit .env with your API keys:
-#   META_APP_ID, META_APP_SECRET
-#   OPENAI_API_KEY
-#   STRIPE_SECRET_KEY
-#   JWT_SECRET, ENCRYPTION_KEY
+# - META_APP_ID & META_APP_SECRET (from Meta Developer Console)
+# - OPENAI_API_KEY (from platform.openai.com)
+# - STRIPE_SECRET_KEY (from Stripe Dashboard, optional)
 ```
 
-### 3a. Docker (Recommended)
+### 3. Start Services
 
 ```bash
-# Start everything (PostgreSQL + Redis + App + Worker)
-docker-compose up -d
+# Start PostgreSQL & Redis
+docker compose up -d postgres redis
 
-# App available at http://localhost:3000
-# Migrations run automatically on first PostgreSQL start
-```
+# Run database migrations
+docker exec -i adfusion-postgres psql -U adfusion -d adfusion < migrations/001_initial_schema.sql
 
-### 3b. Manual Setup
+# Seed demo data
+docker exec -i adfusion-postgres psql -U adfusion -d adfusion < seed.sql
 
-```bash
-# Start PostgreSQL and Redis separately, then:
-npm run db:migrate          # Apply schema
-npm run db:seed             # Insert demo data
-npm run build               # Compile TypeScript
-npm start                   # Start server
+# Build & Start
+npm run build
+npm run dev
 ```
 
 ### 4. Access
 
 - **Dashboard**: http://localhost:3000
-- **API**: http://localhost:3000/api
-- **Health**: http://localhost:3000/health
-- **Demo Login**: demo@adfusion.dev / password123
+- **API Health**: http://localhost:3000/api/health
+- **Demo Login**: `demo@adfusion.dev` / `password123`
+
+### One-Line Setup
+
+```bash
+chmod +x scripts/setup.sh && ./scripts/setup.sh
+```
 
 ## API Reference
 
 ### Authentication
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/auth/signup` | Create account |
-| POST | `/api/auth/login` | Login (returns JWT) |
+| POST | `/api/auth/signup` | Create account (email, password, name) |
+| POST | `/api/auth/login` | Login (returns JWT tokens) |
 | POST | `/api/auth/refresh` | Refresh access token |
-| GET | `/api/auth/me` | Get current user profile |
+| GET | `/api/auth/me` | Get current user profile + workspaces |
 | GET | `/api/auth/meta/connect` | Start Meta OAuth flow |
-| GET | `/api/auth/meta/callback` | Meta OAuth callback |
+| GET | `/api/auth/meta/callback` | Handle Meta OAuth callback |
 | GET | `/api/auth/meta/accounts` | List connected ad accounts |
 | DELETE | `/api/auth/meta/accounts/:id` | Disconnect ad account |
 
 ### Campaigns
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/campaigns` | List campaigns (filterable, paginated) |
-| GET | `/api/campaigns/:id` | Get campaign with ad sets & trend |
+| GET | `/api/campaigns` | List campaigns (paginated, with 7d metrics) |
+| GET | `/api/campaigns/:id` | Get campaign details + ad sets |
 | POST | `/api/campaigns` | Create campaign (via Meta API) |
 | PATCH | `/api/campaigns/:id` | Update campaign |
-| DELETE | `/api/campaigns/:id` | Archive campaign |
-| POST | `/api/campaigns/:id/sync` | Force sync campaign data |
-| GET | `/api/campaigns/:id/insights` | Get campaign insights |
-| POST | `/api/campaigns/sync-all` | Sync all connected accounts |
+| DELETE | `/api/campaigns/:id` | Delete campaign |
+| POST | `/api/campaigns/sync` | Sync single ad account |
+| POST | `/api/campaigns/sync-all` | Sync all active ad accounts |
 
-### AI Optimization
+### AI Engine
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/ai/analyze-campaign` | Full campaign performance analysis |
+| POST | `/api/ai/analyze-campaign` | AI campaign performance analysis |
 | POST | `/api/ai/generate-copy` | Generate ad copy variations |
-| POST | `/api/ai/generate-headlines` | Generate ad headlines |
+| POST | `/api/ai/generate-headlines` | Generate headlines |
 | POST | `/api/ai/creative-fatigue` | Detect creative fatigue |
-| POST | `/api/ai/scaling-readiness` | Check scaling readiness |
-| POST | `/api/ai/recommend-audiences` | Get audience recommendations |
-| POST | `/api/ai/optimize-budget` | Optimize budget allocation |
+| POST | `/api/ai/scaling-readiness` | Check if campaign is ready to scale |
+| POST | `/api/ai/recommend-audiences` | Get targeting recommendations |
+| POST | `/api/ai/optimize-budget` | AI budget allocation |
 | GET | `/api/ai/history` | Get AI analysis history |
 
 ### Automation
@@ -252,7 +256,7 @@ npm start                   # Start server
 |--------|----------|-------------|
 | GET | `/api/automation/rules` | List automation rules |
 | POST | `/api/automation/rules` | Create automation rule |
-| GET | `/api/automation/rules/:id` | Get rule with executions |
+| GET | `/api/automation/rules/:id` | Get rule details + executions |
 | PATCH | `/api/automation/rules/:id` | Update rule |
 | DELETE | `/api/automation/rules/:id` | Delete rule |
 | POST | `/api/automation/rules/:id/run` | Manually trigger rule |
@@ -262,146 +266,221 @@ npm start                   # Start server
 ### Dashboard
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/dashboard/summary` | Main dashboard overview |
-| GET | `/api/dashboard/spend-trend` | Spend & performance trend |
+| GET | `/api/dashboard/summary` | Main dashboard overview with comparisons |
+| GET | `/api/dashboard/spend-trend` | Daily spend/metrics time series |
 | GET | `/api/dashboard/top-campaigns` | Top campaigns by metric |
-| GET | `/api/dashboard/top-ads` | Top ads by CTR |
-| GET | `/api/dashboard/notifications` | Get notifications |
-| PATCH | `/api/dashboard/notifications/:id/read` | Mark notification read |
+| GET | `/api/dashboard/top-ads` | Top performing ads |
+| GET | `/api/dashboard/notifications` | Get notifications (with unread count) |
+| PATCH | `/api/dashboard/notifications/:id/read` | Mark notification as read |
 
 ### Billing
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/billing/status` | Current plan, usage, limits |
-| GET | `/api/billing/plans` | Available plans |
-| POST | `/api/billing/create-checkout` | Create Stripe checkout session |
-| POST | `/api/billing/create-portal` | Create Stripe customer portal |
+| GET | `/api/billing/plans` | Available subscription plans |
+| POST | `/api/billing/create-checkout` | Create Stripe Checkout session |
+| POST | `/api/billing/create-portal` | Create Stripe Customer Portal |
 
 ### Webhooks
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET/POST | `/api/webhooks/meta` | Meta webhook verification & events |
-| POST | `/api/webhooks/stripe` | Stripe subscription lifecycle events |
+| GET | `/api/webhooks/meta` | Meta webhook verification |
+| POST | `/api/webhooks/meta` | Meta webhook events |
+| POST | `/api/webhooks/stripe` | Stripe webhook events |
 
-## Deployment to Google Cloud
+### System
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Health check (DB + environment status) |
+
+## Database Schema
+
+17 tables with full referential integrity, indexes, and auto-update triggers:
+
+```
+users                    (auth, profiles, Meta user ID)
+workspaces              (multi-tenant root, Stripe subscription)
+workspace_members       (team collaboration with roles)
+ad_accounts             (Meta ad accounts, encrypted tokens)
+campaigns               (synced from Meta, budget tracking)
+adsets                   (targeting, placements, learning stage)
+ads                      (creatives, tracking specs)
+ad_insights             (time-series metrics, 25+ columns)
+automation_rules        (conditions, actions, schedules)
+rule_executions         (full execution audit log)
+ai_analyses             (AI analysis history + token usage)
+ai_generated_copy       (generated ad copy archive)
+notifications           (in-app alerts)
+audit_log               (user action tracking)
+sync_jobs               (sync history and status)
+refresh_tokens          (JWT refresh token management)
+api_usage               (billing usage tracking)
+```
+
+## Docker
+
+### Development
+
+```bash
+# Start everything
+docker compose up -d
+
+# View logs
+docker compose logs -f app
+
+# Rebuild after changes
+docker compose up -d --build app
+
+# Stop all
+docker compose down
+```
+
+### Production Build
+
+```bash
+# Build production image
+docker build -t adfusion:latest .
+
+# Run standalone
+docker run -p 3000:3000 \
+  -e DATABASE_URL=postgres://... \
+  -e REDIS_URL=redis://... \
+  -e JWT_SECRET=... \
+  adfusion:latest
+```
+
+## GCP Deployment
+
+Three deployment paths are provided: **Cloud Run** (recommended), **GKE**, and **App Engine**.
 
 ### Option 1: Cloud Run (Recommended)
 
+Automated deployment script handles everything:
+
 ```bash
-# Set environment
-export GCP_PROJECT_ID=your-project
+export GCP_PROJECT_ID=your-project-id
 export GCP_REGION=us-central1
+export META_APP_ID=your_meta_app_id
+export META_APP_SECRET=your_meta_app_secret
+export OPENAI_API_KEY=sk-your-key
+export STRIPE_SECRET_KEY=sk_live_your-key
 
-# Deploy using the script
+chmod +x scripts/deploy-gcp.sh
 ./scripts/deploy-gcp.sh
-
-# Or manually:
-gcloud builds submit --config cloudbuild.yaml \
-  --substitutions=_REGION=us-central1
 ```
 
-Infrastructure created:
-- Cloud SQL (PostgreSQL 16) — `db-f1-micro` instance
-- Memorystore (Redis) — 1GB basic tier
-- Cloud Run — Main app (1-10 instances) + Worker (1-3 instances)
-- Secret Manager — All API keys and secrets
+**What the script creates:**
+1. Cloud SQL PostgreSQL 16 instance
+2. Memorystore Redis 7 instance
+3. Serverless VPC connector (for Redis access)
+4. All secrets in Secret Manager
+5. Main app Cloud Run service (auto-scaling 1-10)
+6. Background worker Cloud Run service (1-3 instances)
 
-### Option 2: GKE (Kubernetes)
+**Post-deployment:**
+1. Run migrations via Cloud SQL Proxy
+2. Update `META_REDIRECT_URI` in Meta Developer Console
+3. Configure Stripe webhook endpoint
+4. Configure Meta webhook endpoint
+
+### Option 2: Cloud Run via Cloud Build (CI/CD)
+
+```bash
+# Submit build + deploy
+gcloud builds submit \
+  --config cloudbuild.yaml \
+  --substitutions _REGION=us-central1,_CLOUD_SQL_INSTANCE=project:region:instance
+```
+
+### Option 3: GKE (Kubernetes)
 
 ```bash
 # Create cluster
-gcloud container clusters create adfusion-cluster \
-  --num-nodes=3 --machine-type=e2-medium --region=us-central1
+gcloud container clusters create adfusion \
+  --num-nodes=3 --machine-type=e2-medium \
+  --region=us-central1
 
 # Apply manifests
 kubectl apply -f deploy/gke/k8s.yaml
 
-# Components: App (2 replicas), Worker (1), PostgreSQL, Redis
-# Includes: Ingress, HPA, ManagedCertificate, Services
+# Update secrets (edit k8s.yaml first!)
+kubectl apply -f deploy/gke/k8s.yaml -n adfusion
 ```
 
-### Option 3: App Engine Flexible
+Includes: Deployment (2 replicas), Worker, PostgreSQL StatefulSet, Redis StatefulSet, Service, Ingress, Managed Certificate, HPA (auto-scale 2-10).
+
+### Option 4: App Engine Flexible
 
 ```bash
 gcloud app deploy deploy/app-engine/app.yaml
 ```
 
-### Post-Deployment Checklist
+## Environment Variables
 
-1. **Database Migrations** — Run `migrations/001_initial_schema.sql` against Cloud SQL
-2. **Secrets** — Store all API keys in Secret Manager
-3. **Meta OAuth** — Update redirect URI to `https://your-domain/api/auth/meta/callback`
-4. **Stripe Webhooks** — Set endpoint to `https://your-domain/api/webhooks/stripe`
-5. **Custom Domain** — Configure via Cloud Run domain mapping or GKE Ingress
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NODE_ENV` | No | `development` / `production` (default: development) |
+| `PORT` | No | Server port (default: 3000) |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `REDIS_URL` | Yes | Redis connection string |
+| `JWT_SECRET` | Yes | JWT signing secret (min 32 chars) |
+| `SESSION_SECRET` | Yes | Session secret (min 32 chars) |
+| `META_APP_ID` | Yes* | Meta/Facebook App ID |
+| `META_APP_SECRET` | Yes* | Meta/Facebook App Secret |
+| `META_REDIRECT_URI` | Yes* | OAuth callback URL |
+| `META_WEBHOOK_VERIFY_TOKEN` | No | Meta webhook verification token |
+| `OPENAI_API_KEY` | Yes* | OpenAI API key (for AI features) |
+| `STRIPE_SECRET_KEY` | No | Stripe secret key (for billing) |
+| `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook signing secret |
+| `ENCRYPTION_KEY` | Yes | 32-char AES encryption key |
+| `ENCRYPTION_IV` | Yes | 16-char AES initialization vector |
 
-## Database Schema
-
-16 tables organized around multi-tenant workspaces:
-
-| Table | Description | Key Relations |
-|-------|-------------|---------------|
-| `users` | User accounts with OAuth IDs | Root entity |
-| `workspaces` | Multi-tenant containers | `owner_id` → users |
-| `workspace_members` | RBAC memberships | workspace + user |
-| `ad_accounts` | Meta ad accounts (encrypted tokens) | workspace |
-| `campaigns` | Meta campaigns (synced) | ad_account |
-| `adsets` | Meta ad sets | campaign |
-| `ads` | Meta ads with creative JSON | adset |
-| `ad_insights` | Time-series performance metrics | campaign/adset/ad |
-| `automation_rules` | Rule definitions (conditions + actions) | workspace |
-| `rule_executions` | Rule execution audit log | automation_rule |
-| `ai_analyses` | AI analysis results | workspace |
-| `ai_generated_copy` | Generated ad copy storage | workspace |
-| `notifications` | In-app notification system | workspace |
-| `audit_log` | Full audit trail | workspace + user |
-| `sync_jobs` | Sync job history | ad_account |
-| `api_usage` | Usage tracking for billing | workspace |
-
-## Configuration
-
-All configuration is centralized in `src/config/index.ts` with the following key sections:
-
-- **Server** — Port, environment, base URL
-- **Database** — PostgreSQL connection pool (min/max, timeouts, SSL)
-- **Redis** — Connection URL, reconnect strategy
-- **JWT** — Secret, access token expiry (7d), refresh token expiry (30d)
-- **Meta API** — App credentials, v21.0, scopes, rate limits (200/hr, 4800/day), insight fields
-- **OpenAI** — API key, model (gpt-4o), max tokens (4096)
-- **Stripe** — Keys, 4 plan tiers with limits and price IDs
-- **Optimization Thresholds** — Creative fatigue, learning phase, scaling, diagnostics
-
-## Security
-
-- **JWT Authentication** — RS256 signed access + refresh tokens
-- **Meta OAuth 2.0** — Secure state parameter, long-lived token exchange
-- **AES-256-CBC Encryption** — All Meta access tokens encrypted at rest
-- **bcrypt** — Password hashing with 12 salt rounds
-- **Helmet CSP** — Strict Content Security Policy headers
-- **Rate Limiting** — 100 requests per 15-minute window
-- **RBAC** — 5 roles (owner, admin, manager, analyst, viewer) per workspace
-- **Input Validation** — express-validator on all endpoints
-- **Webhook Verification** — Meta verify token + Stripe signature validation
+*Required for respective features to work. The platform runs without them but with limited functionality.
 
 ## Testing
 
 ```bash
-npm test               # Run all tests with coverage
-npm run test:unit      # Unit tests only
-npm run test:watch     # Watch mode
-npm run typecheck      # TypeScript type checking
-npm run lint           # ESLint
+# Run all tests
+npm test
+
+# Run with coverage
+npx jest --coverage --forceExit
+
+# Run specific suite
+npx jest tests/unit/auth.test.ts --forceExit
+
+# Watch mode
+npm run test:watch
 ```
 
-## Background Jobs
+**Current test coverage**: 51 tests across 3 suites covering auth, encryption, AI thresholds, automation logic, API routes, Meta API config, database schema validation, and billing configuration.
 
-| Schedule | Job | Description |
-|----------|-----|-------------|
-| Every 10 min | Incremental Sync | Sync last 3 days of insights for active accounts |
-| Daily 2 AM UTC | Full Sync | Complete campaign/adset/ad/insight sync (30 days) |
-| Every 30 min | Rule Evaluation | Evaluate all active automation rules |
-| Daily 9 AM UTC | Token Check | Alert on tokens expiring within 7 days |
-| Weekly Sun 3 AM | Data Cleanup | Purge old executions, notifications, audit logs |
+## NPM Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run build` | Compile TypeScript to `dist/` |
+| `npm run dev` | Start dev server with ts-node-dev (auto-reload) |
+| `npm start` | Start production server |
+| `npm test` | Run Jest test suite |
+| `npm run lint` | Run ESLint |
+| `npm run typecheck` | TypeScript type checking (no emit) |
+| `npm run docker:build` | Build Docker image |
+| `npm run docker:up` | Start Docker Compose stack |
+| `npm run docker:down` | Stop Docker Compose stack |
+| `npm run migrate` | Apply database migrations |
+| `npm run seed` | Seed development data |
+| `npm run jobs:start` | Start background job runner |
+
+## Security
+
+- **Authentication**: JWT access tokens (7d) + refresh tokens (30d), bcrypt password hashing (12 rounds)
+- **Encryption**: AES-256-CBC for Meta access tokens at rest
+- **HTTP Security**: Helmet CSP, CORS with origin whitelist, rate limiting (100 req/15min)
+- **Multi-tenancy**: All queries scoped by `workspace_id`, workspace membership verification
+- **Webhook verification**: HMAC signature verification for Stripe, token verification for Meta
+- **No plaintext secrets**: All API keys stored via environment variables / Secret Manager
 
 ## License
 
-MIT
+Private / Proprietary
