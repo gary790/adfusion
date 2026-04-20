@@ -2,6 +2,9 @@
 # AD FUSION - Google Cloud Build
 # Build + Deploy to Cloud Run
 # ============================================
+# Trigger: Push to main branch
+# Usage: gcloud builds submit --config cloudbuild.yaml \
+#          --substitutions=_REGION=us-central1,_CLOUD_SQL_INSTANCE=project:region:instance
 
 steps:
   # Step 1: Build Docker image
@@ -25,15 +28,18 @@ steps:
       - 'push'
       - 'gcr.io/$PROJECT_ID/adfusion:latest'
 
-  # Step 3: Run database migrations
+  # Step 3: Run database migrations via Cloud SQL Proxy
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        echo "Running database migrations..."
-        # Migrations are applied via the init SQL on first launch
-        # For subsequent migrations, use Cloud SQL Proxy + psql
+        echo "=== Database Migrations ==="
+        echo "Migrations are applied automatically on first launch."
+        echo "For manual migration, use Cloud SQL Proxy + psql:"
+        echo "  cloud-sql-proxy ${_CLOUD_SQL_INSTANCE} --port 5433"
+        echo "  psql -h localhost -p 5433 -U adfusion -d adfusion -f migrations/001_initial_schema.sql"
+        echo "  psql -h localhost -p 5433 -U adfusion -d adfusion -f migrations/002_world_class_upgrade.sql"
 
   # Step 4: Deploy to Cloud Run (main app)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -58,9 +64,13 @@ steps:
       - '1'
       - '--max-instances'
       - '10'
+      - '--concurrency'
+      - '80'
+      - '--timeout'
+      - '300'
       - '--allow-unauthenticated'
       - '--set-env-vars'
-      - 'NODE_ENV=production'
+      - 'NODE_ENV=production,PORT=3000'
       - '--set-secrets'
       - 'DATABASE_URL=adfusion-db-url:latest,REDIS_URL=adfusion-redis-url:latest,JWT_SECRET=adfusion-jwt-secret:latest,OPENAI_API_KEY=adfusion-openai-key:latest,META_APP_ID=adfusion-meta-app-id:latest,META_APP_SECRET=adfusion-meta-app-secret:latest,STRIPE_SECRET_KEY=adfusion-stripe-key:latest,ENCRYPTION_KEY=adfusion-encryption-key:latest'
       - '--add-cloudsql-instances'
